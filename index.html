@@ -478,7 +478,7 @@ const MODEL_COLORS=['#1C9AAB','#9694FF','#C2691A','#2E8B57','#8E44AD','#B8860B',
 function modelList(){
   // every model the page can draw at a target: key, label, getter(rec, index) -> 19 quantiles, group
   const L=[{k:'M3',n:'Panel + financial conditions (M3)',g:'benchmark',get:(r,i)=>r.M3},{k:'M3_HD',n:'M3 + Hidden Dissent',g:'benchmark',get:(r,i)=>r.M3_HD}];
-  if(typeof ALT!=='undefined') ALT.forEach(a=>L.push({k:a.k,n:'Panel + '+a.n,g:a.g,get:(r,i)=>a.q[i],getB:a.bench?((r,i)=>a.bench[i]):null,benchNote:a.benchNote||null}));
+  if(typeof ALT!=='undefined') ALT.forEach(a=>L.push({k:a.k,n:'Panel + '+a.n,g:a.g,get:(r,i)=>(a.q[i]||(a.live&&a.live[r.o])||null),getB:a.bench?((r,i)=>(a.bench[i]||(a.live_bench&&a.live_bench[r.o])||null)):null,benchNote:a.benchNote||null}));
   L.forEach((m,i)=>m.col=MODEL_COLORS[i%MODEL_COLORS.length]);
   return L;
 }
@@ -1169,6 +1169,9 @@ function applyUpdate(u, source){
     const ok=u.dist.every(r=>r && r.o && r.t && ['M2','M3'].every(k=>Array.isArray(r[k]) && r[k].length===19) && ['M2_HD','M3_HD'].every(k=>r[k]==null || (Array.isArray(r[k]) && r[k].length===19))) && u.dist.length>=70;
     if(ok){ DIST.length=0; u.dist.forEach(r=>DIST.push(r)); dist.i=Math.min(dist.i,DIST.length-1); sim.i=DIST.length-1; changed=true; }
   }
+  if(Array.isArray(u.alt) && u.alt.length && typeof ALT!=='undefined'){
+    const m=new Map(ALT.map(x=>[x.k,x])); u.alt.forEach(x=>{ if(x && x.k && (Array.isArray(x.q)||x.live)) m.set(x.k, Object.assign({}, m.get(x.k)||{}, x)); }); ALT.length=0; m.forEach(v=>ALT.push(v)); changed=true;
+  }
   if(Array.isArray(u.sig) && u.sig.length && typeof SIG!=='undefined'){ SIG.length=0; u.sig.forEach(r=>SIG.push(r)); changed=true; }
   if(Array.isArray(u.groups)){ DATA.groups=u.groups; changed=true; }
   if(Array.isArray(u.fam) && u.fam.length && typeof FAM!=='undefined'){ FAM.length=0; u.fam.forEach(r=>FAM.push(r)); changed=true; }
@@ -1215,7 +1218,7 @@ function panelData(){
   el.appendChild(ctl);
   const h=document.createElement('h3'); h.className='sec'; h.textContent='Update format'; el.appendChild(h);
   const pre=document.createElement('pre'); pre.className='schema';
-  pre.textContent='JSON (any subset of keys; series are merged by date/quarter):\n{\n  "meta": {"paper": "v4.26", "date": "2027-01-20"},\n  "series": {\n    "hd_meetings": [["2026-01-28", 0.241], ["2026-03-18", 0.236]],\n    "quarterly":   [{"q": "2025Q4", "hd": 0.228, "ff": 3.88, "g": 2.1, "nfci": -0.52, "spf": 1.9}]\n  },\n  "dist": [{"o": "2025Q2", "t": "2026Q2", "y": null, "M2": [19 quantiles], "M2_HD": [...], "M3": [...], "M3_HD": [...]}],\n  "signals": [...], "ladder": [...], "robustness": [...], "rt": {...}, "alternatives": [...]\n}\n\n"coef": [{"o": "2025Q2", "hd_mean": 0.2257, "hd_sd": 0.039, "b_M2": [19 coefficients], "b_M3": [...]}]\n\n"dist" replaces the full set of predictive distributions (one record per target, quantiles Q05…Q95 in order; "y" null while the target is unresolved).\n\nCSV (meeting-level Hidden Dissent):\nmeeting_date,hd_minutes\n2026-01-28,0.241\n\nArtifact database (online): collection "releases", document "latest", same JSON as above.';
+  pre.textContent='JSON (any subset of keys; series are merged by date/quarter):\n{\n  "meta": {"paper": "v4.26", "date": "2027-01-20"},\n  "series": {\n    "hd_meetings": [["2026-01-28", 0.241], ["2026-03-18", 0.236]],\n    "quarterly":   [{"q": "2025Q4", "hd": 0.228, "ff": 3.88, "g": 2.1, "nfci": -0.52, "spf": 1.9}]\n  },\n  "dist": [{"o": "2025Q2", "t": "2026Q2", "y": null, "M2": [19 quantiles], "M2_HD": [...], "M3": [...], "M3_HD": [...]}],\n  "signals": [...], "ladder": [...], "robustness": [...], "rt": {...}, "alternatives": [...]\n}\n\n"alt": [{"k":"EPU","live":{"2025Q2":[19 quantiles],…},"live_bench":{…}}]   (live origins for a Table 2 model)\n  "coef": [{"o": "2025Q2", "hd_mean": 0.2257, "hd_sd": 0.039, "b_M2": [19 coefficients], "b_M3": [...]}]\n\n"dist" replaces the full set of predictive distributions (one record per target, quantiles Q05…Q95 in order; "y" null while the target is unresolved).\n\nCSV (meeting-level Hidden Dissent):\nmeeting_date,hd_minutes\n2026-01-28,0.241\n\nArtifact database (online): collection "releases", document "latest", same JSON as above.';
   el.appendChild(pre);
   setTimeout(()=>{
     const msg=document.getElementById('dataMsg');
