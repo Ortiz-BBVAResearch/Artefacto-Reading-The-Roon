@@ -113,7 +113,7 @@ footer{margin-top:44px; padding-top:18px; border-top:1px solid var(--rule); font
 <div class="wrap">
 <h1>Reading the Room with AI<span class="h1b">FOMC Deliberation and Growth at Risk</span></h1>
 <p class="sub">What FOMC deliberation adds to a Growth-at-Risk model built on 123 public series, across the whole distribution of growth four quarters ahead — and what the content of that information is not. Ortiz and Rodrigo, <em>Reading the Room with AI</em>.</p>
-<span class="stamp" id="stampVersion"></span><span class="stamp ok" id="stampData" hidden></span>
+<span class="stamp" id="stampVersion"></span><span class="stamp ok" id="stampData" hidden></span><button type="button" class="btn" id="liveBtn" style="margin:12px 0 0;padding:4px 10px;font-size:12px;vertical-align:bottom">Check for new data</button><span class="status" id="liveMsg" style="display:inline-block;margin:12px 0 0 10px"></span>
 
 <div class="controls top">
   <div class="cgroup"><span class="clabel" id="lbl-pres">Screen</span><div class="seg" role="group" aria-labelledby="lbl-pres" id="presSeg"></div></div>
@@ -846,7 +846,7 @@ function panelSimulator(){
       '<input type="range" id="uSlider" min="0" max="'+(DIST.length-1)+'" value="'+sim.i+'" style="width:100%"></div>'+
     '<div class="cgroup"><span class="clabel">&nbsp;</span><div class="seg">'+
       '<button type="button" id="uPrev" title="previous origin">◀</button><button type="button" id="uPlay">'+(sim.playing?'Pause':'Play')+'</button><button type="button" id="uNext" title="next origin">▶</button><button type="button" id="uLast">Latest</button></div></div>'+
-    '<div class="cgroup" style="margin-left:auto;text-align:right"><span class="clabel">Origin · target</span><div class="when">'+rec.o+' <span class="whensep">forecasting</span> '+rec.t+'</div></div>';
+    '<div class="cgroup" style="margin-left:auto;text-align:right"><span class="clabel">Origin · target'+(rec.window==='live'||rec.window==='resolved_live'?' · live nowcast, outside the paper’s evaluation window':'')+'</span><div class="when">'+rec.o+' <span class="whensep">forecasting</span> '+rec.t+'</div></div>';
   el.appendChild(bar);
 
   // information switches
@@ -1165,7 +1165,7 @@ function applyUpdate(u, source){
   if(u.meta){ Object.assign(DATA.meta, u.meta); changed=true; }
   ['signals','ladder','robustness','rt','families','declared','alternatives','recessions'].forEach(k=>{ if(u[k]){ DATA[k]=u[k]; changed=true; } });
   if(Array.isArray(u.dist) && u.dist.length){
-    const ok=u.dist.every(r=>r && r.o && r.t && ['M2','M2_HD','M3','M3_HD'].every(k=>Array.isArray(r[k]) && r[k].length===19));
+    const ok=u.dist.every(r=>r && r.o && r.t && ['M2','M2_HD','M3','M3_HD'].every(k=>Array.isArray(r[k]) && r[k].length===19)) && u.dist.length>=70;
     if(ok){ DIST.length=0; u.dist.forEach(r=>DIST.push(r)); dist.i=Math.min(dist.i,DIST.length-1); sim.i=DIST.length-1; changed=true; }
   }
   if(Array.isArray(u.sig) && u.sig.length && typeof SIG!=='undefined'){ SIG.length=0; u.sig.forEach(r=>SIG.push(r)); changed=true; }
@@ -1285,6 +1285,17 @@ async function checkSameOrigin(){
 }
 checkSameOrigin();
 checkDb(false).then(()=>{ if(DATA.meta.source!=='embedded') render(); });
+// Live update: re-read data.json (GitHub Pages) and the artifact database on demand and every 15 minutes.
+async function liveCheck(manual){
+  const msg=document.getElementById('liveMsg'); const before=DATA.meta.date+'|'+DATA.series.hd_meetings.length+'|'+DIST.length;
+  if(msg) msg.textContent='checking…';
+  await checkSameOrigin(); await checkDb(true);
+  const after=DATA.meta.date+'|'+DATA.series.hd_meetings.length+'|'+DIST.length;
+  if(msg) msg.textContent=(after!==before?'new data loaded · ':'no new data · ')+'source: '+dataStatus.source+' · checked '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+(location.protocol==='file:'?' · offline file: load updates from the Data tab':'');
+  if(after!==before) render();
+}
+setTimeout(()=>{ const b=document.getElementById('liveBtn'); if(b) b.addEventListener('click',()=>liveCheck(true)); },0);
+if(location.protocol!=='file:') setInterval(()=>liveCheck(false), 15*60*1000);
 
 </script>
 </body></html>

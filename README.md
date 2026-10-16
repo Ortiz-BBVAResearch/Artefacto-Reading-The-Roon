@@ -14,3 +14,6 @@ Interactive companion to Ortiz and Rodrigo, *Reading the Room with AI* (working 
 Edit or replace `data.json` and commit; the page reads it on every load. To change the results or the text, replace `index.html`.
 
 Hidden Dissent index: Tsang and Yang (2025), *Journal of Economic Dynamics and Control* 180, 105197; data at https://www.digitecon.org/hidden-dissent-index.
+
+## Automatic refresh of the public series
+`.github/workflows/update-data.yml` runs every Monday (and on demand from the Actions tab): it pulls GDPC1, NFCI, DFF, VIXCLS and WTI from FRED, the GPR index and the US EPU index, extends `series.quarterly` and the external measures in `sig`, and commits `data.json` if anything changed. It needs no API key. It does **not** touch the model's distributions, Hidden Dissent or the SPF, which come from the replication pipeline (`update_explorer`) and the Tsang–Yang data site. First run: Actions → *Update public data* → *Run workflow*. If the repository's Actions are disabled, enable them in Settings → Actions → General.
