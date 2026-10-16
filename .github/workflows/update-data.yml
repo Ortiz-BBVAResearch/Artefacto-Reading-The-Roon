@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
       - run: pip install pandas requests openpyxl xlrd
       - name: Pull FRED, GPR and EPU and refresh data.json
-        run: python scripts/update_public_data.py data.json
+        run: python update_public_data.py data.json
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
