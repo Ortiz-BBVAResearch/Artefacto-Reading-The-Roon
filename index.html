@@ -875,11 +875,12 @@ function panelSimulator(){
   const curves=[];
   if(simu.m2) curves.push({q:rec.M2, col:'var(--muted)', dash:'5 4', width:1.6, n:'Macro database (M2)', key:'base', base:'M2'});
   if(simu.m3) curves.push({q:rec.M3, col:'var(--alt)', dash:'5 4', width:1.6, n:'Macro database + NFCI (M3)', key:'base3', base:'M3'});
-  if(simu.hd && simu.m2) curves.push({q:rec.M2_HD, col:'var(--pos)', fill:true, width:2.2, n:'M2 + Hidden Dissent', key:'hd', base:'M2', getA:(r,i)=>r.M2_HD, getB:(r,i)=>r.M2});
-  if(simu.m3hd) curves.push({q:rec.M3_HD, col:'var(--alt)', fill:!simu.m2, width:2.2, n:'M3 + Hidden Dissent', key:'hd3', base:'M3', getA:(r,i)=>r.M3_HD, getB:(r,i)=>r.M3});
+  if(simu.hd && simu.m2 && rec.M2_HD) curves.push({q:rec.M2_HD, col:'var(--pos)', fill:true, width:2.2, n:'M2 + Hidden Dissent', key:'hd', base:'M2', getA:(r,i)=>r.M2_HD, getB:(r,i)=>r.M2});
+  if(simu.m3hd && rec.M3_HD) curves.push({q:rec.M3_HD, col:'var(--alt)', fill:!simu.m2, width:2.2, n:'M3 + Hidden Dissent', key:'hd3', base:'M3', getA:(r,i)=>r.M3_HD, getB:(r,i)=>r.M3});
   L.filter(m=>m.g!=='benchmark' && simu.models[m.k]).forEach(m=>{ const q=m.get(rec,sim.i); if(q) curves.push({q, col:m.col, width:1.7, n:'M2 + '+cap(m.n.replace('Panel + ',''))+(m.benchNote?' *':''), key:m.k, base:'M2', getA:m.get, getB:m.getB||((r,i)=>r.M2)}); });
   if(!curves.length) curves.push({q:rec.M2, col:'var(--muted)', dash:'5 4', width:1.6, n:'Macro database (M2)', key:'base', base:'M2'});
   const box=document.createElement('div'); box.className='chartbox'; box.innerHTML=densityMultiSVG(rec, curves); el.appendChild(box);
+  if((simu.hd||simu.m3hd) && !rec.M2_HD){ const nh=document.createElement('p'); nh.className='note'; nh.style.margin='6px 0 0'; nh.textContent='Hidden Dissent is not yet available for the Minutes this origin reads; only the public-data models are shown.'; el.appendChild(nh); }
   const leg=document.createElement('p'); leg.className='legend'; leg.innerHTML=curves.map(c=>'<span style="color:'+c.col+'">'+(c.dash?'— — ':'—— ')+esc(c.n)+'</span>').join(' &nbsp;·&nbsp; ')+(resolved?' &nbsp;·&nbsp; <span style="color:var(--neg)">| realised '+rec.y.toFixed(2)+'</span>':''); el.appendChild(leg);
 
   // state at origin (compact)
@@ -1165,7 +1166,7 @@ function applyUpdate(u, source){
   if(u.meta){ Object.assign(DATA.meta, u.meta); changed=true; }
   ['signals','ladder','robustness','rt','families','declared','alternatives','recessions'].forEach(k=>{ if(u[k]){ DATA[k]=u[k]; changed=true; } });
   if(Array.isArray(u.dist) && u.dist.length){
-    const ok=u.dist.every(r=>r && r.o && r.t && ['M2','M2_HD','M3','M3_HD'].every(k=>Array.isArray(r[k]) && r[k].length===19)) && u.dist.length>=70;
+    const ok=u.dist.every(r=>r && r.o && r.t && ['M2','M3'].every(k=>Array.isArray(r[k]) && r[k].length===19) && ['M2_HD','M3_HD'].every(k=>r[k]==null || (Array.isArray(r[k]) && r[k].length===19))) && u.dist.length>=70;
     if(ok){ DIST.length=0; u.dist.forEach(r=>DIST.push(r)); dist.i=Math.min(dist.i,DIST.length-1); sim.i=DIST.length-1; changed=true; }
   }
   if(Array.isArray(u.sig) && u.sig.length && typeof SIG!=='undefined'){ SIG.length=0; u.sig.forEach(r=>SIG.push(r)); changed=true; }
