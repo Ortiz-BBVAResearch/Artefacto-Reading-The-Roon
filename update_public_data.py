@@ -8,6 +8,7 @@ import pandas as pd, requests
 
 FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}"
 GPR  = "https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls"
+FREDMD = "https://files.stlouisfed.org/files/htdocs/fred-md/monthly/current.csv"
 EPU  = "https://www.policyuncertainty.com/media/US_Policy_Uncertainty_Data.xlsx"
 FIRST = "1994Q2"   # first origin used for the expanding standardization of the external measures
 
@@ -37,6 +38,50 @@ def epu_quarterly():
     df["date"] = pd.to_datetime(dict(year=df["Year"].astype(int), month=df["Month"].astype(int), day=1))
     col = [c for c in df.columns if "Three" in str(c) or "News" in str(c)][0]
     return qmean(df.set_index("date")[col])
+
+def fredmd_groups():
+    """Download the current FRED-MD vintage, apply its transformation codes, aggregate to quarters,
+    and summarize each of the four groups of the paper's panel by its first principal component
+    (standardized over 2007Q4 onward, sign anchored so that higher = stronger activity, higher
+    inflation, higher long rates, higher equity prices). Descriptive only: the model uses the 123 series."""
+    import numpy as np, os
+    r = requests.get(FREDMD, timeout=120); r.raise_for_status()
+    raw = pd.read_csv(io.StringIO(r.text))
+    codes = raw.iloc[0, 1:].astype(float); df = raw.iloc[1:].copy()
+    df["date"] = pd.to_datetime(df.iloc[:, 0]); df = df.set_index("date").drop(columns=raw.columns[0]).astype(float)
+    fam = json.load(open(os.path.join(os.path.dirname(__file__), "family_map.json")))
+    def tr(x, c):
+        c = int(c)
+        if c == 1: return x
+        if c == 2: return x.diff()
+        if c == 3: return x.diff().diff()
+        if c == 4: return np.log(x)
+        if c == 5: return np.log(x).diff()
+        if c == 6: return np.log(x).diff().diff()
+        if c == 7: return x.pct_change().diff()
+        return x
+    T = pd.DataFrame({c: tr(df[c], codes[c]) for c in df.columns if c in fam})
+    Q = T.resample("QE").mean(); Q = Q[Q.index >= "2007-10-01"]
+    # drop the last quarter if its last month is missing
+    lastm = df.index.max(); qend = Q.index.max()
+    if lastm.month % 3 != 0: Q = Q.iloc[:-1]
+    out = []; anchors = {"REAL": "INDPRO", "MARKETS": "S&P 500", "NOMINAL": "CPIAUCSL", "CREDIT_RATES": "GS10"}
+    res = {}
+    for F in ["REAL", "NOMINAL", "CREDIT_RATES", "MARKETS"]:
+        cols = [c for c in Q.columns if fam.get(c) == F]
+        X = Q[cols].copy(); X = X.fillna(X.mean())
+        Z = (X - X.mean()) / X.std(ddof=0); Z = Z.fillna(0.0)
+        U, S, Vt = np.linalg.svd(Z.values, full_matrices=False); pc = Z.values @ Vt[0]; share = float(S[0]**2 / (S**2).sum())
+        a = Q[anchors[F]].values if anchors[F] in Q else Z.values[:, 0]
+        m = ~np.isnan(a)
+        if np.corrcoef(pc[m], a[m])[0, 1] < 0: pc = -pc
+        pc = (pc - pc.mean()) / pc.std()
+        res[F] = (pc, share)
+    for i, d in enumerate(Q.index):
+        rec = {"o": f"{d.year}Q{(d.month-1)//3+1}"}
+        for F, (pc, share) in res.items(): rec[F] = round(float(pc[i]), 3); rec[F + "_share"] = round(share, 3)
+        out.append(rec)
+    return out, str(raw.columns[0])
 
 def expanding_z(series_dict, first=FIRST):
     keys = sorted(k for k in series_dict if k >= first); out = {}
@@ -80,6 +125,10 @@ def main(path):
                 s["v"].append([q, round(src[q], 4), z.get(q)]); log.append(f"{s['k']} + {q}")
         s["v"].sort(key=lambda v: v[0])
 
+    try:
+        groups, vint = fredmd_groups(); data["groups"] = groups; log.append(f"FRED-MD groups recomputed through {groups[-1]['o']} (vintage column: {vint})")
+        data.setdefault("meta", {})["fredmd_vintage"] = dt.date.today().isoformat()
+    except Exception as e: log.append(f"FRED-MD not refreshed: {e}")
     data.setdefault("meta", {})["public_refresh"] = dt.date.today().isoformat()
     json.dump(data, open(path, "w"), separators=(",", ":"))
     with open("update_log.md", "a") as f:
