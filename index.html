@@ -547,6 +547,7 @@ function panelSim(){
       '<button type="button" id="spairM3" aria-pressed="'+(base==='M3')+'">Panel + financial conditions</button></div></div>'+
     '<div class="cgroup" style="flex:1 1 160px;min-width:160px"><span class="clabel">Forecast origin</span>'+
       '<input type="range" id="simSlider" min="0" max="'+(DIST.length-1)+'" value="'+sim.i+'" style="width:100%"></div>'+
+'<div class="cgroup"><span class="clabel">Go to origin</span><select id="simSel" class="btn" style="padding:6px 8px">'+DIST.map((r,k)=>'<option value="'+k+'"'+(k===sim.i?' selected':'')+'>'+r.o+' → '+r.t+(r.window==='live'||r.window==='resolved_live'?' (live)':'')+'</option>').join('')+'</select></div>'+
     '<div class="cgroup"><span class="clabel">&nbsp;</span><div class="seg">'+
       '<button type="button" id="simPrev" title="previous origin">◀</button>'+
       '<button type="button" id="simPlay">'+(sim.playing?'Pause':'Play')+'</button>'+
@@ -720,6 +721,7 @@ function panelSim(){
   setTimeout(()=>{
     const on=(id,f)=>{ const b=document.getElementById(id); if(b) b.addEventListener('click',f); };
     const sl=document.getElementById('simSlider'); if(sl) sl.addEventListener('input',e=>{sim.i=+e.target.value; sim.cf=null; render();});
+    const se=document.getElementById('simSel'); if(se) se.addEventListener('change',e=>{sim.i=+e.target.value; sim.cf=null; render();});
     on('spairM2',()=>{sim.pair='M2'; render();}); on('spairM3',()=>{sim.pair='M3'; render();});
     on('simPrev',()=>{sim.i=Math.max(0,sim.i-1); sim.cf=null; render();}); on('simNext',()=>{sim.i=Math.min(DIST.length-1,sim.i+1); sim.cf=null; render();});
     on('simLast',()=>{sim.i=DIST.length-1; sim.cf=null; render();});
@@ -844,6 +846,7 @@ function panelSimulator(){
   bar.innerHTML=
     '<div class="cgroup" style="flex:1 1 160px;min-width:160px"><span class="clabel">Forecast origin</span>'+
       '<input type="range" id="uSlider" min="0" max="'+(DIST.length-1)+'" value="'+sim.i+'" style="width:100%"></div>'+
+'<div class="cgroup"><span class="clabel">Go to origin</span><select id="uSel" class="btn" style="padding:6px 8px">'+DIST.map((r,k)=>'<option value="'+k+'"'+(k===sim.i?' selected':'')+'>'+r.o+' → '+r.t+(r.window==='live'||r.window==='resolved_live'?' (live)':'')+'</option>').join('')+'</select></div>'+
     '<div class="cgroup"><span class="clabel">&nbsp;</span><div class="seg">'+
       '<button type="button" id="uPrev" title="previous origin">◀</button><button type="button" id="uPlay">'+(sim.playing?'Pause':'Play')+'</button><button type="button" id="uNext" title="next origin">▶</button><button type="button" id="uLast">Latest</button></div></div>'+
     '<div class="cgroup" style="margin-left:auto;text-align:right"><span class="clabel">Origin · target'+(rec.window==='live'||rec.window==='resolved_live'?' · live nowcast, outside the paper’s evaluation window':'')+'</span><div class="when">'+rec.o+' <span class="whensep">forecasting</span> '+rec.t+'</div></div>';
@@ -903,6 +906,7 @@ function panelSimulator(){
   setTimeout(()=>{
     const on=(id,f)=>{ const b=document.getElementById(id); if(b) b.addEventListener('click',f); };
     const sl=document.getElementById('uSlider'); if(sl) sl.addEventListener('input',e=>{sim.i=+e.target.value; render();});
+    const se=document.getElementById('uSel'); if(se) se.addEventListener('change',e=>{sim.i=+e.target.value; render();});
     on('uPrev',()=>{sim.i=Math.max(0,sim.i-1); render();}); on('uNext',()=>{sim.i=Math.min(DIST.length-1,sim.i+1); render();}); on('uLast',()=>{sim.i=DIST.length-1; render();});
     on('uPlay',()=>{ sim.playing=!sim.playing; if(sim.timer){clearInterval(sim.timer); sim.timer=null;}
       if(sim.playing){ if(sim.i>=DIST.length-1) sim.i=0; sim.timer=setInterval(()=>{ if(sim.i>=DIST.length-1){ sim.playing=false; clearInterval(sim.timer); sim.timer=null; } else sim.i++; render(); }, 700); } render(); });
