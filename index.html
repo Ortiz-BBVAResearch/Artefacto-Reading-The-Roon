@@ -1281,7 +1281,7 @@ async function checkSameOrigin(){
     if(location.protocol==='file:') return;
     const r=await fetch('data.json',{cache:'no-store'}); if(!r.ok) return;
     const u=await r.json(); const ok=applyUpdate(u,'data.json on this site ('+(u.meta&&u.meta.date?u.meta.date:'')+')');
-    if(ok){ const st=document.getElementById('stampData'); if(st){ st.hidden=false; st.textContent='data.json · '+(u.meta&&u.meta.date?u.meta.date:''); } render(); }
+    if(ok){ const st=document.getElementById('stampData'); if(st){ st.hidden=false; st.textContent='data.json · results '+(u.meta&&u.meta.date?u.meta.date:'')+(u.meta&&u.meta.public_refresh?' · public series refreshed '+u.meta.public_refresh:' · public series not yet refreshed')+(u.meta&&u.meta.live_through?' · model live through '+u.meta.live_through:''); } render(); }
   }catch(e){}
 }
 checkSameOrigin();
