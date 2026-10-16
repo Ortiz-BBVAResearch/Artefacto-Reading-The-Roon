@@ -478,7 +478,7 @@ const MODEL_COLORS=['#1C9AAB','#9694FF','#C2691A','#2E8B57','#8E44AD','#B8860B',
 function modelList(){
   // every model the page can draw at a target: key, label, getter(rec, index) -> 19 quantiles, group
   const L=[{k:'M3',n:'Panel + financial conditions (M3)',g:'benchmark',get:(r,i)=>r.M3},{k:'M3_HD',n:'M3 + Hidden Dissent',g:'benchmark',get:(r,i)=>r.M3_HD}];
-  if(typeof ALT!=='undefined') ALT.forEach(a=>L.push({k:a.k,n:'Panel + '+(/^(Beige|SPF|VIX|Projections)/.test(a.n)?a.n:a.n.charAt(0).toLowerCase()+a.n.slice(1)),g:a.g,get:(r,i)=>a.q[i],getB:a.bench?((r,i)=>a.bench[i]):null,benchNote:a.benchNote||null}));
+  if(typeof ALT!=='undefined') ALT.forEach(a=>L.push({k:a.k,n:'Panel + '+a.n,g:a.g,get:(r,i)=>a.q[i],getB:a.bench?((r,i)=>a.bench[i]):null,benchNote:a.benchNote||null}));
   L.forEach((m,i)=>m.col=MODEL_COLORS[i%MODEL_COLORS.length]);
   return L;
 }
@@ -825,11 +825,12 @@ function panelDash(){
 }
 
 // ---------- Simulator: the distribution at each moment, under alternative information sets ----------
-let simu = {hd:true, models:{}, fam:{REAL:true,NOMINAL:true,CREDIT_RATES:true,MARKETS:true}};
+let simu = {hd:true, m2:true, m3:false, m3hd:false, models:{}, fam:{REAL:true,NOMINAL:true,CREDIT_RATES:true,MARKETS:true}};
 
+function cap(t){ return t.charAt(0).toUpperCase()+t.slice(1); }
 function panelSimulator(){
   const el=document.createElement('div'); el.className='panel';
-  const rec=DIST[sim.i], base=sim.pair, aug=base+'_HD';
+  const rec=DIST[sim.i];
   const Q=DATA.series.quarterly, M=DATA.series.hd_meetings;
   const qrow=Q.find(r=>r.q===rec.o)||{};
   const resolved=(rec.y!=null);
@@ -841,9 +842,6 @@ function panelSimulator(){
   // controls: origin
   const bar=document.createElement('div'); bar.className='controls'; bar.style.marginTop='0';
   bar.innerHTML=
-    '<div class="cgroup"><span class="clabel" id="lbl-upair">Public information</span><div class="seg" role="group" aria-labelledby="lbl-upair">'+
-      '<button type="button" id="upairM2" aria-pressed="'+(base==='M2')+'">123-series panel</button>'+
-      '<button type="button" id="upairM3" aria-pressed="'+(base==='M3')+'">Panel + financial conditions</button></div></div>'+
     '<div class="cgroup" style="flex:1 1 160px;min-width:160px"><span class="clabel">Forecast origin</span>'+
       '<input type="range" id="uSlider" min="0" max="'+(DIST.length-1)+'" value="'+sim.i+'" style="width:100%"></div>'+
     '<div class="cgroup"><span class="clabel">&nbsp;</span><div class="seg">'+
@@ -856,49 +854,58 @@ function panelSimulator(){
   const sw=document.createElement('div'); sw.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 22px;margin:14px 0 6px';
   const cbox=(id,checked,col,label,disabled,title)=>'<label style="display:flex;align-items:center;gap:7px;margin:5px 0;cursor:'+(disabled?'not-allowed':'pointer')+';opacity:'+(disabled?'.45':'1')+'"'+(title?' title="'+esc(title)+'"':'')+'><input type="checkbox" '+id+(checked?' checked':'')+(disabled?' disabled':'')+' style="accent-color:'+col+'"><span style="display:inline-block;width:14px;height:3px;background:'+col+'"></span><span style="font-size:13px">'+label+'</span></label>';
   const famOK=(typeof FAMDIST!=='undefined' && FAMDIST && Object.keys(FAMDIST).length && FAMDIST.__full19);
+  sw.style.gridTemplateColumns='repeat(auto-fit,minmax(220px,1fr))';
   sw.innerHTML=
+    '<div><span class="clabel">Public information</span>'+
+      cbox('data-u="m2"', simu.m2, 'var(--muted)', 'Macro database (123 series, M2)')+
+      cbox('data-u="m3"', simu.m3, 'var(--alt)', 'Macro database + financial conditions, NFCI (M3)')+
+      cbox('data-u="m3hd"', simu.m3hd, 'var(--alt)', 'M3 + Hidden Dissent')+
+      '<p class="note" style="margin:4px 0 0;font-size:12px">The measures of the deliberation and the external signals enter one at a time on the macro database (M2), as in Table 2.</p></div>'+
     '<div><span class="clabel">Deliberation of the Committee</span>'+
-      cbox('data-u="hd"', simu.hd, 'var(--pos)', 'Hidden Dissent'+(base==='M3'?' (on panel + financial conditions)':''))+
-      delib.map(m=>cbox('data-u="'+m.k+'"', !!simu.models[m.k], m.col, m.n.replace('Panel + ',''), base==='M3', base==='M3'?'Sealed bank exists on the public panel only':'')).join('')+'</div>'+
+      cbox('data-u="hd"', simu.hd, 'var(--pos)', 'Hidden Dissent')+
+      delib.map(m=>cbox('data-u="'+m.k+'"', !!simu.models[m.k], m.col, cap(m.n.replace('Panel + ','')))).join('')+'</div>'+
     '<div><span class="clabel">Public signals from outside the Committee</span>'+
-      ext.map(m=>cbox('data-u="'+m.k+'"', !!simu.models[m.k], m.col, m.n.replace('Panel + ',''), base==='M3', base==='M3'?'Sealed bank exists on the public panel only':'')).join('')+'</div>'+
+      ext.map(m=>cbox('data-u="'+m.k+'"', !!simu.models[m.k], m.col, cap(m.n.replace('Panel + ','')))).join('')+'</div>'+
     '<div><span class="clabel">Groups of the public panel</span>'+
       [['REAL','Real activity (62 series)'],['NOMINAL','Prices (23)'],['CREDIT_RATES','Credit and rates (34)'],['MARKETS','Market prices (4)']].map(([k,n])=>cbox('data-fam="'+k+'"', simu.fam[k], 'var(--muted)', n, !famOK, 'Full-distribution banks without each group are not in the data object yet (see Model performance, section 4, for the lower block)')).join('')+
       (famOK?'':'<p class="note" style="margin:4px 0 0;font-size:12px">Switching a group off needs the sealed banks without that group at all 19 quantiles; the package has them for the lower block only (Model performance, section 4). They will appear here when exported.</p>')+'</div>';
   el.appendChild(sw);
 
   // curves
-  const curves=[{q:rec[base], col:'var(--muted)', dash:'5 4', width:1.6, n:(base==='M2'?'Public panel (M2)':'Panel + financial conditions (M3)'), key:'base'}];
-  if(simu.hd) curves.push({q:rec[aug], col:'var(--pos)', fill:true, width:2.2, n:(base==='M2'?'Panel':'M3')+' + Hidden Dissent', key:'hd', getA:(r,i)=>r[aug]});
-  if(base==='M2') L.filter(m=>m.g!=='benchmark' && simu.models[m.k]).forEach(m=>{ const q=m.get(rec,sim.i); if(q) curves.push({q, col:m.col, width:1.7, n:m.n+(m.benchNote?' *':''), key:m.k, getA:m.get, getB:m.getB}); });
+  const curves=[];
+  if(simu.m2) curves.push({q:rec.M2, col:'var(--muted)', dash:'5 4', width:1.6, n:'Macro database (M2)', key:'base', base:'M2'});
+  if(simu.m3) curves.push({q:rec.M3, col:'var(--alt)', dash:'5 4', width:1.6, n:'Macro database + NFCI (M3)', key:'base3', base:'M3'});
+  if(simu.hd && simu.m2) curves.push({q:rec.M2_HD, col:'var(--pos)', fill:true, width:2.2, n:'M2 + Hidden Dissent', key:'hd', base:'M2', getA:(r,i)=>r.M2_HD, getB:(r,i)=>r.M2});
+  if(simu.m3hd) curves.push({q:rec.M3_HD, col:'var(--alt)', fill:!simu.m2, width:2.2, n:'M3 + Hidden Dissent', key:'hd3', base:'M3', getA:(r,i)=>r.M3_HD, getB:(r,i)=>r.M3});
+  L.filter(m=>m.g!=='benchmark' && simu.models[m.k]).forEach(m=>{ const q=m.get(rec,sim.i); if(q) curves.push({q, col:m.col, width:1.7, n:'M2 + '+cap(m.n.replace('Panel + ',''))+(m.benchNote?' *':''), key:m.k, base:'M2', getA:m.get, getB:m.getB||((r,i)=>r.M2)}); });
+  if(!curves.length) curves.push({q:rec.M2, col:'var(--muted)', dash:'5 4', width:1.6, n:'Macro database (M2)', key:'base', base:'M2'});
   const box=document.createElement('div'); box.className='chartbox'; box.innerHTML=densityMultiSVG(rec, curves); el.appendChild(box);
   const leg=document.createElement('p'); leg.className='legend'; leg.innerHTML=curves.map(c=>'<span style="color:'+c.col+'">'+(c.dash?'— — ':'—— ')+esc(c.n)+'</span>').join(' &nbsp;·&nbsp; ')+(resolved?' &nbsp;·&nbsp; <span style="color:var(--neg)">| realised '+rec.y.toFixed(2)+'</span>':''); el.appendChild(leg);
 
   // state at origin (compact)
   const cards=document.createElement('div'); cards.className='cards'; cards.style.marginTop='12px';
-  const sb=sortedQ(rec[base]);
-  cards.innerHTML=mk('Public data alone', sb[9].toFixed(2)+'%', 'median; P(growth &lt; 0) '+(100*cdfAt(rec[base],0)).toFixed(0)+'%; 5th percentile '+sb[0].toFixed(2)+'%.')+
+  const sb=sortedQ(rec.M2), sb3=sortedQ(rec.M3);
+  cards.innerHTML=mk('Macro database alone', sb[9].toFixed(2)+'%', 'median; P(growth &lt; 0) '+(100*cdfAt(rec.M2,0)).toFixed(0)+'%; 5th percentile '+sb[0].toFixed(2)+'%. With the NFCI: median '+sb3[9].toFixed(2)+'%, 5th percentile '+sb3[0].toFixed(2)+'%.')+
     (qrow.hd!=null?mk('Hidden Dissent at the origin', qrow.hd.toFixed(3), 'quarterly mean of the Minutes read at the origin; current growth '+(qrow.g!=null?qrow.g.toFixed(1)+'%':'—')+', NFCI '+(qrow.nfci!=null?qrow.nfci.toFixed(2):'—')+'.', 'var(--pos)'):'')+
     (resolved?mk('What happened', rec.y.toFixed(2)+'%', 'mean growth over the four quarters to '+rec.t+'.', 'var(--neg)'):mk('What happened','pending','the target window has not closed.'));
   el.appendChild(cards);
 
   // comparison table
   const w=document.createElement('div'); w.className='tablewrap';
-  let html='<table><thead><tr><th>Information set</th><th>Median</th><th>Shift vs public data</th><th>P(growth &lt; 0)</th><th>5th pct</th>'+(resolved?'<th>Loss at this target</th>':'')+'<th>Loss reduction vs '+(base==='M2'?'M2':'M3')+', to date</th></tr></thead><tbody>';
-  curves.forEach(c=>{ const sq=sortedQ(c.q); const tr=c.getA?trackRecordQ(c.getB||((r,i)=>r[base]), c.getA, sim.i):null;
-    html+='<tr><td><span style="display:inline-block;width:12px;height:3px;background:'+c.col+';margin-right:6px;vertical-align:middle"></span>'+esc(c.n)+'</td><td class="num">'+sq[9].toFixed(2)+'</td><td class="num" style="color:'+(c.key==='base'?'inherit':(sq[9]-sb[9]>=0?'var(--pos)':'var(--neg)'))+'">'+(c.key==='base'?'—':((sq[9]-sb[9]>=0?'+':'')+(sq[9]-sb[9]).toFixed(2)))+'</td><td class="num">'+(100*cdfAt(c.q,0)).toFixed(0)+'%</td><td class="num">'+sq[0].toFixed(2)+'</td>'+(resolved?'<td class="num">'+pinball(c.q,rec.y).toFixed(3)+'</td>':'')+'<td class="num" style="color:'+(tr?(tr.gain>=0?'var(--pos)':'var(--neg)'):'inherit')+'">'+(tr?((tr.gain>=0?'+':'')+tr.gain.toFixed(2)+'% ('+tr.wins+'/'+tr.n+')'):'—')+'</td></tr>'; });
+  let html='<table><thead><tr><th>Information set</th><th>Median</th><th>Shift vs its public data</th><th>P(growth &lt; 0)</th><th>5th pct</th>'+(resolved?'<th>Loss at this target</th>':'')+'<th>Loss reduction vs its public data, to date</th></tr></thead><tbody>';
+  curves.forEach(c=>{ const sq=sortedQ(c.q); const sbase=(c.base==='M3')?sb3:sb; const tr=c.getA?trackRecordQ(c.getB, c.getA, sim.i):null; const isBase=/^base/.test(c.key);
+    html+='<tr><td><span style="display:inline-block;width:12px;height:3px;background:'+c.col+';margin-right:6px;vertical-align:middle"></span>'+esc(c.n)+'</td><td class="num">'+sq[9].toFixed(2)+'</td><td class="num" style="color:'+(isBase?'inherit':(sq[9]-sbase[9]>=0?'var(--pos)':'var(--neg)'))+'">'+(isBase?'—':((sq[9]-sbase[9]>=0?'+':'')+(sq[9]-sbase[9]).toFixed(2)))+'</td><td class="num">'+(100*cdfAt(c.q,0)).toFixed(0)+'%</td><td class="num">'+sq[0].toFixed(2)+'</td>'+(resolved?'<td class="num">'+pinball(c.q,rec.y).toFixed(3)+'</td>':'')+'<td class="num" style="color:'+(tr?(tr.gain>=0?'var(--pos)':'var(--neg)'):'inherit')+'">'+(tr?((tr.gain>=0?'+':'')+tr.gain.toFixed(2)+'% ('+tr.wins+'/'+tr.n+')'):'—')+'</td></tr>'; });
   html+='</tbody></table>'; w.innerHTML=html; el.appendChild(w);
   if(curves.some(c=>c.getB)){ const nb=document.createElement('p'); nb.className='note'; nb.style.marginTop='8px'; nb.textContent='* Loss reduction measured against this measure’s own benchmark: the public panel estimated on the common history of the projection measures, with the dispersion penalties (λ 0.562/5.62/100), as in Table 2.'; el.appendChild(nb); }
-  el.appendChild(callout('<strong>Reading the switches.</strong> Each measure enters on its own, unpenalized, on top of the public panel, exactly as in Table 2 of the paper; the curves are not additive and two measures switched on are two separate models, not one model with both. The last column accumulates the out-of-sample loss reduction to the current origin, so a presentation can move through the origins and watch which information sets earn their place and which do not.'));
+  el.appendChild(callout('<strong>Reading the switches.</strong> Each measure enters on its own, unpenalized, on top of the macro database, exactly as in Table 2 of the paper; Hidden Dissent is also available on top of the database with financial conditions; the curves are not additive and two measures switched on are two separate models, not one model with both. The last column accumulates the out-of-sample loss reduction to the current origin, so a presentation can move through the origins and watch which information sets earn their place and which do not.'));
 
   setTimeout(()=>{
     const on=(id,f)=>{ const b=document.getElementById(id); if(b) b.addEventListener('click',f); };
     const sl=document.getElementById('uSlider'); if(sl) sl.addEventListener('input',e=>{sim.i=+e.target.value; render();});
-    on('upairM2',()=>{sim.pair='M2'; render();}); on('upairM3',()=>{sim.pair='M3'; render();});
     on('uPrev',()=>{sim.i=Math.max(0,sim.i-1); render();}); on('uNext',()=>{sim.i=Math.min(DIST.length-1,sim.i+1); render();}); on('uLast',()=>{sim.i=DIST.length-1; render();});
     on('uPlay',()=>{ sim.playing=!sim.playing; if(sim.timer){clearInterval(sim.timer); sim.timer=null;}
       if(sim.playing){ if(sim.i>=DIST.length-1) sim.i=0; sim.timer=setInterval(()=>{ if(sim.i>=DIST.length-1){ sim.playing=false; clearInterval(sim.timer); sim.timer=null; } else sim.i++; render(); }, 700); } render(); });
-    el.querySelectorAll('input[data-u]').forEach(cb=>cb.addEventListener('change',e=>{ const k=e.target.dataset.u; if(k==='hd') simu.hd=e.target.checked; else simu.models[k]=e.target.checked; render(); }));
+    el.querySelectorAll('input[data-u]').forEach(cb=>cb.addEventListener('change',e=>{ const k=e.target.dataset.u; if(k==='hd') simu.hd=e.target.checked; else if(k==='m2') simu.m2=e.target.checked; else if(k==='m3') simu.m3=e.target.checked; else if(k==='m3hd') simu.m3hd=e.target.checked; else simu.models[k]=e.target.checked; render(); }));
     el.querySelectorAll('input[data-fam]').forEach(cb=>cb.addEventListener('change',e=>{ simu.fam[e.target.dataset.fam]=e.target.checked; render(); }));
   },0);
   return el;
