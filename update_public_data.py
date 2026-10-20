@@ -39,6 +39,24 @@ def epu_quarterly():
     col = [c for c in df.columns if "Three" in str(c) or "News" in str(c)][0]
     return qmean(df.set_index("date")[col])
 
+SPF_GROWTH = "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/survey-of-professional-forecasters/data-files/median/medianGrowth.xlsx"
+def spf_growth_consensus():
+    """SPF median real GDP growth, averaged over the four quarters after the survey quarter (horizons 2-5), as in Table 1 of the paper."""
+    r = requests.get(SPF_GROWTH, timeout=60); r.raise_for_status()
+    x = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
+    sh = [k for k in x if str(k).upper().startswith("RGDP")]; df = x[sh[0]] if sh else list(x.values())[0]
+    cols = [c for c in df.columns if str(c).upper() in ("DRGDP2", "DRGDP3", "DRGDP4", "DRGDP5")]
+    df = df.dropna(subset=["YEAR", "QUARTER"])
+    out = {}
+    for _, row in df.iterrows():
+        v = [row[c] for c in cols if pd.notna(row[c])]
+        if len(v) == 4: out[f"{int(row['YEAR'])}Q{int(row['QUARTER'])}"] = round(float(sum(v) / 4), 2)
+    return out
+
+def yoy_quarterly(s):  # monthly price index -> quarterly mean -> % change on a year earlier
+    q = s.resample("QE").mean().dropna(); y = 100 * (q / q.shift(4) - 1)
+    return {f"{d.year}Q{(d.month-1)//3+1}": round(float(v), 2) for d, v in y.dropna().items()}
+
 def fredmd_groups():
     """Download the current FRED-MD vintage, apply its transformation codes, aggregate to quarters,
     and summarize each of the four groups of the paper's panel by its first principal component
@@ -104,14 +122,22 @@ def main(path):
     try: epu = epu_quarterly()
     except Exception as e: epu = {}; log.append(f"EPU not refreshed: {e}")
 
-    # quarterly state: extend / refresh g, nfci, ff; keep hd and spf as they are
+    try: pce = yoy_quarterly(fred("PCEPI")); corepce = yoy_quarterly(fred("PCEPILFE"))
+    except Exception as e: pce = {}; corepce = {}; log.append(f"PCE inflation not refreshed: {e}")
+    try: spf = spf_growth_consensus(); log.append(f"SPF growth consensus through {max(spf)}")
+    except Exception as e: spf = {}; log.append(f"SPF growth consensus not refreshed: {e}")
+
+    # quarterly state: extend / refresh g, nfci, ff, inflation, spf; keep hd as it is
     Q = {r["q"]: r for r in data["series"]["quarterly"]}
-    for q in sorted(set(g) | set(nfci) | set(ff)):
+    for q in sorted(set(g) | set(nfci) | set(ff) | set(pce) | set(spf)):
         if q < "1994Q1" or not complete_quarter(q): continue
         row = Q.setdefault(q, {"q": q})
         if q in g: row["g"] = g[q]
         if q in nfci: row["nfci"] = round(nfci[q], 3)
         if q in ff: row["ff"] = round(ff[q], 2)
+        if q in pce: row["pce_yoy"] = pce[q]
+        if q in corepce: row["corepce_yoy"] = corepce[q]
+        if q in spf: row["spf"] = spf[q]
     data["series"]["quarterly"] = [Q[k] for k in sorted(Q)]
 
     # external measures in "sig": extend raw values at new origins, expanding z from 1994Q2
