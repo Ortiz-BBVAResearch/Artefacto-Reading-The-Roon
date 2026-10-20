@@ -923,20 +923,30 @@ function panelSimulator(){
     ];
     L.filter(m=>m.g==='external').forEach(m=>bars.push({k:m.k, n:cap(m.n.replace('Panel + ','')), grp:'External signals', b:{M2:(cx[m.k]||{}).b}, col:m.col, model:m.k}));
     const has=b=>Object.values(b.b).some(v=>Array.isArray(v)&&v.length===19);
+    // Where each indicator stands at the origin, in standard deviations (z0), so the bar departs from the current reading.
+    const sigAt=k=>{ const sr=(typeof SIG!=='undefined')?SIG.find(x=>x.k===k):null; const row=sr?sr.v.find(v=>v[0]===rec.o):null; return row?{raw:row[1], z:row[2], u:sr.u||''}:null; };
+    const grow=(DATA.groups||[]).find(g=>g.o===rec.o);
+    bars.forEach(b=>{
+      if(b.grp==='Macro database' && b.k!=='NFCI'){ if(grow && grow[b.k]!=null){ b.z0=grow[b.k]; b.raw='group component (PC1) '+(grow[b.k]>=0?'+':'')+grow[b.k].toFixed(2)+' s.d.'; } }
+      else if(b.k==='NFCI'){ if(qrow.nfci!=null) b.raw='NFCI '+qrow.nfci.toFixed(2)+' (bank scale not exported; bar is a shock from the reading)'; }
+      else { const sg=sigAt(b.k); if(sg){ b.z0=sg.z; b.raw=(typeof sg.raw==='number'?sg.raw.toFixed(b.k==='HD'?3:2):sg.raw)+(sg.u?' '+sg.u:'')+' = '+(sg.z>=0?'+':'')+sg.z.toFixed(2)+' s.d.'; } }
+    });
     const wbox=document.createElement('div'); wbox.className='card'; wbox.style.cssText='margin:6px 0 12px;padding:12px 14px';
-    let h='<h3>What if, at '+rec.o+' · shocks in standard deviations</h3><p class="note" style="margin:0 0 8px">Move a block of information by k standard deviations. Every model that contains that block shifts each quantile by its own coefficients, holding the rest fixed; the curve as estimated stays dotted behind. Linear in the model, so large shocks are illustration. Group bars move every series of the group by one standard deviation and add the ridge coefficients of the sealed bank at this origin (M2, and M3 with the NFCI); external-signal bars use the coefficient of each Table 2 model on its standardized signal.</p>';
+    let h='<h3>What if, at '+rec.o+' · move each indicator from where it stands</h3><p class="note" style="margin:0 0 8px">Each bar starts at the indicator’s reading at this origin (the orange tick, in standard deviations of its own history); drag it to another level and the shock is the difference. Every model that contains that block shifts each quantile by its own coefficients, holding the rest fixed; the curve as estimated stays dotted behind. Linear in the model, so large shocks are illustration. Group bars move every series of the group by one standard deviation and add the ridge coefficients of the sealed bank at this origin (M2, and M3 with the NFCI); external-signal bars use the coefficient of each Table 2 model on its standardized signal.</p>';
     let lastGrp=null;
-    bars.forEach(b=>{ const ok=has(b); const cur=(simu.wi[b.k]!=null)?simu.wi[b.k]:0;
+    bars.forEach(b=>{ const ok=has(b); const cur=(simu.wi[b.k]!=null)?simu.wi[b.k]:0; const z0=(b.z0!=null)?b.z0:0; const lvl=z0+cur;
+      const lo=Math.min(-3, Math.floor((z0-3)*4)/4), hi=Math.max(3, Math.ceil((z0+3)*4)/4);
+      const pct=((z0-lo)/(hi-lo)*100).toFixed(1);
       if(b.grp!==lastGrp){ h+='<div class="clabel" style="margin:10px 0 2px">'+b.grp+'</div>'; lastGrp=b.grp; }
-      h+='<div style="display:grid;grid-template-columns:minmax(170px,1fr) minmax(200px,2fr) 150px;gap:12px;align-items:center;margin:4px 0;opacity:'+(ok?1:.45)+'">'+
-        '<div style="font-size:13px"><span style="display:inline-block;width:12px;height:3px;background:'+b.col+';margin-right:6px;vertical-align:middle"></span>'+esc(b.n)+'</div>'+
-        '<input type="range" data-wi="'+b.k+'" min="-3" max="3" step="0.25" value="'+cur+'" '+(ok?'':'disabled title="coefficients not exported for this origin"')+' style="width:100%">'+
-        '<div class="rval" style="text-align:left">'+(cur>=0?'+':'')+cur.toFixed(2)+' s.d.'+(ok?' <button type="button" class="btn" data-wireset="'+b.k+'" style="padding:2px 7px;font-size:11px;margin-left:6px">0</button>':'')+'</div></div>';
+      h+='<div style="display:grid;grid-template-columns:minmax(170px,1fr) minmax(200px,2fr) 190px;gap:12px;align-items:center;margin:4px 0;opacity:'+(ok?1:.45)+'">'+
+        '<div style="font-size:13px"><span style="display:inline-block;width:12px;height:3px;background:'+b.col+';margin-right:6px;vertical-align:middle"></span>'+esc(b.n)+(b.raw?'<div style="font-size:11px;color:var(--muted)">now: '+esc(b.raw)+'</div>':'')+'</div>'+
+        '<div style="position:relative">'+(b.z0!=null?'<div title="reading at the origin" style="position:absolute;left:'+pct+'%;top:-3px;bottom:-3px;width:2px;background:var(--neg);pointer-events:none"></div>':'')+'<input type="range" data-wi="'+b.k+'" data-z0="'+z0+'" min="'+lo+'" max="'+hi+'" step="0.25" value="'+lvl+'" '+(ok?'':'disabled title="coefficients not exported for this origin"')+' style="width:100%;position:relative"></div>'+
+        '<div class="rval" style="text-align:left;white-space:nowrap"><span>'+(b.z0!=null?((lvl>=0?'+':'')+lvl.toFixed(2)+' s.d. (Δ '):'(Δ ')+(cur>=0?'+':'')+cur.toFixed(2)+')</span>'+(ok?' <button type="button" class="btn" data-wireset="'+b.k+'" style="padding:2px 7px;font-size:11px;margin-left:6px" title="back to the reading at the origin">now</button>':'')+'</div></div>';
     });
     if(sx.from) h+='<p class="note" style="margin:8px 0 0;font-size:12px">This origin is estimated weekly from public data; its sensitivities are not yet exported by the weekly run, so the bars use the coefficients of the last sealed bank ('+sx.from+'). Hidden Dissent has no bank at this origin.</p>';
     const miss=bars.filter(b=>!has(b)).map(b=>b.n);
     if(miss.length) h+='<p class="note" style="margin:8px 0 0;font-size:12px">Not yet exported for this origin: '+miss.join(', ')+'. The pipeline provides them (keys "sens" and "coef_live"); the bars activate when they arrive.</p>';
-    h+='<p style="margin:8px 0 0"><button type="button" class="btn" id="wiResetAll" style="font-size:12px">Reset all</button></p>';
+    h+='<p style="margin:8px 0 0"><button type="button" class="btn" id="wiResetAll" style="font-size:12px">Back to the readings</button></p>';
     wbox.innerHTML=h; el.appendChild(wbox);
     // apply shocks
     const shifted=[];
@@ -979,8 +989,8 @@ function panelSimulator(){
       if(sim.playing){ if(sim.i>=DIST.length-1) sim.i=0; sim.timer=setInterval(()=>{ if(sim.i>=DIST.length-1){ sim.playing=false; clearInterval(sim.timer); sim.timer=null; } else sim.i++; render(); }, 700); } render(); });
     el.querySelectorAll('input[data-u]').forEach(cb=>cb.addEventListener('change',e=>{ const k=e.target.dataset.u; if(k==='hd') simu.hd=e.target.checked; else if(k==='m2') simu.m2=e.target.checked; else if(k==='m3') simu.m3=e.target.checked; else if(k==='m3hd') simu.m3hd=e.target.checked; else simu.models[k]=e.target.checked; render(); }));
     el.querySelectorAll('input[data-wi]').forEach(sl=>{
-      sl.addEventListener('input',e=>{ const lab=e.target.parentElement.querySelector('.rval'); const v=+e.target.value; if(lab) lab.firstChild.textContent=(v>=0?'+':'')+v.toFixed(2)+' s.d.'; });
-      sl.addEventListener('change',e=>{ simu.wi[e.target.dataset.wi]=+e.target.value; render(); });
+      sl.addEventListener('input',e=>{ const lab=e.target.closest('div[style*="grid"]').querySelector('.rval span'); const z0=+e.target.dataset.z0; const v=+e.target.value, k=v-z0; if(lab) lab.textContent=(e.target.previousElementSibling?((v>=0?'+':'')+v.toFixed(2)+' s.d. (Δ '):'(Δ ')+(k>=0?'+':'')+k.toFixed(2)+')'; });
+      sl.addEventListener('change',e=>{ const k=+e.target.value-(+e.target.dataset.z0); if(Math.abs(k)<1e-9) delete simu.wi[e.target.dataset.wi]; else simu.wi[e.target.dataset.wi]=k; render(); });
     });
     const ra=document.getElementById('wiResetAll'); if(ra) ra.addEventListener('click',()=>{ simu.wi={}; render(); });
     el.querySelectorAll('button[data-wireset]').forEach(b=>b.addEventListener('click',e=>{ delete simu.wi[e.target.dataset.wireset]; render(); }));
