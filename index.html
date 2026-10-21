@@ -716,8 +716,7 @@ function miniChart(points, opts){
   const y0=new Date(x0).getUTCFullYear(), y1=new Date(x1).getUTCFullYear(); const step=(y1-y0)>16?5:((y1-y0)>8?2:1);
   for(let y=Math.ceil(y0/step)*step; y<=y1; y+=step){ const x=X(Date.UTC(y,0,1)); if(x>ML) svg+='<text x="'+x+'" y="'+(H-MB+14)+'" text-anchor="middle" fill="var(--faint)" font-size="10" font-family="IBM Plex Mono, monospace">'+y+'</text>'; }
   svg+='<path d="'+points.map((p,i)=>(i?'L':'M')+X(p.x).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')+'" fill="none" stroke="'+(opts.col||'var(--pos)')+'" stroke-width="1.7"/>';
-  if(opts.mark!=null){ const mp=points.reduce((a,p)=>Math.abs(p.x-opts.mark)<Math.abs(a.x-opts.mark)?p:a, points[0]);
-    svg+='<circle cx="'+X(mp.x).toFixed(1)+'" cy="'+Y(mp.v).toFixed(1)+'" r="3.5" fill="var(--neg)"/>'; }
+
   svg+='</svg>';
   return svg;
 }
@@ -740,7 +739,7 @@ function seriesCard(title, unit, points, cur, opts){
 function panelDash(){
   const el=document.createElement('div'); el.className='panel';
   const SECS=[{k:'groups',label:'Macro database (FRED-MD)'},{k:'external',label:'External measures'},{k:'macro',label:'Key variables'},{k:'deliberation',label:'Deliberation measures'}];
-  el.innerHTML='<h2>Model data: how the inputs evolve</h2><p class="note">The series that enter the paper’s Table 2 and the benchmark, as the model saw them at each forecast origin. The orange dot is the origin selected in the Simulator; the readout gives the value at that origin and its distance from the mean of the signal’s own history up to then (the standardization the model uses).</p>';
+  el.innerHTML='<h2>Model data: how the inputs evolve</h2><p class="note">The series that enter the paper’s Table 2 and the benchmark, as the model saw them at each forecast origin. The readout gives the value at the origin selected in the Simulator and its distance from the mean of the signal’s own history up to then (the standardization the model uses).</p>';
   const nav=document.createElement('div'); nav.className='seg'; nav.style.cssText='display:inline-flex;margin:0 0 14px;flex-wrap:wrap';
   SECS.forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t.label; b.setAttribute('aria-pressed',String(t.k===dash.sec)); b.addEventListener('click',()=>{dash.sec=t.k; render();}); nav.appendChild(b); });
   const wn=document.createElement('div'); wn.className='seg'; wn.style.cssText='display:inline-flex;margin:0 0 14px 14px';
