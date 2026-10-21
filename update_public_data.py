@@ -26,18 +26,19 @@ def qlast(s):
 def growth_annualised(gdp):
     g = 100 * ((gdp / gdp.shift(1)) ** 4 - 1); return {f"{d.year}Q{(d.month-1)//3+1}": round(float(v), 1) for d, v in g.dropna().items()}
 
+GPR_MONTHLY = {}; EPU_MONTHLY = {}
 def gpr_quarterly():
     r = requests.get(GPR, timeout=60); r.raise_for_status()
     df = pd.read_excel(io.BytesIO(r.content))
     col = [c for c in df.columns if str(c).upper() == "GPR"][0]
-    df["date"] = pd.to_datetime(df["month"]); return qmean(df.set_index("date")[col])
+    df["date"] = pd.to_datetime(df["month"]); GPR_MONTHLY["gpr"] = mmean(df.set_index("date")[col]); return qmean(df.set_index("date")[col])
 
 def epu_quarterly():
     r = requests.get(EPU, timeout=60); r.raise_for_status()
     df = pd.read_excel(io.BytesIO(r.content)).dropna(subset=["Year", "Month"])
     df["date"] = pd.to_datetime(dict(year=df["Year"].astype(int), month=df["Month"].astype(int), day=1))
     col = [c for c in df.columns if "Three" in str(c) or "News" in str(c)][0]
-    return qmean(df.set_index("date")[col])
+    EPU_MONTHLY["epu"] = mmean(df.set_index("date")[col]); return qmean(df.set_index("date")[col])
 
 SPF_GROWTH = "https://www.philadelphiafed.org/-/media/frbp/assets/surveys-and-data/survey-of-professional-forecasters/data-files/median/medianGrowth.xlsx"
 def spf_growth_consensus():
@@ -79,6 +80,7 @@ def fredmd_groups():
         if c == 7: return x.pct_change().diff()
         return x
     T = pd.DataFrame({c: tr(df[c], codes[c]) for c in df.columns if c in fam})
+    M = T[T.index >= "2007-10-01"].copy()
     Q = T.resample("QE").mean(); Q = Q[Q.index >= "2007-10-01"]
     # drop the last quarter if its last month is missing
     lastm = df.index.max(); qend = Q.index.max()
@@ -99,7 +101,41 @@ def fredmd_groups():
         rec = {"o": f"{d.year}Q{(d.month-1)//3+1}"}
         for F, (pc, share) in res.items(): rec[F] = round(float(pc[i]), 3); rec[F + "_share"] = round(share, 3)
         out.append(rec)
-    return out, str(raw.columns[0])
+    # monthly version of the same summaries (same method on the monthly transformed panel)
+    outm = []; resm = {}
+    for F in ["REAL", "NOMINAL", "CREDIT_RATES", "MARKETS"]:
+        cols = [c for c in M.columns if fam.get(c) == F]
+        X = M[cols].copy(); X = X.fillna(X.mean())
+        Z = (X - X.mean()) / X.std(ddof=0); Z = Z.fillna(0.0)
+        U, S, Vt = np.linalg.svd(Z.values, full_matrices=False); pc = Z.values @ Vt[0]
+        a = M[anchors[F]].values if anchors[F] in M else Z.values[:, 0]; m = ~np.isnan(a)
+        if np.corrcoef(pc[m], a[m])[0, 1] < 0: pc = -pc
+        resm[F] = (pc - pc.mean()) / pc.std()
+    for i, d in enumerate(M.index):
+        rec = {"m": d.strftime("%Y-%m")}
+        for F, pc in resm.items(): rec[F] = round(float(pc[i]), 3)
+        outm.append(rec)
+    return out, str(raw.columns[0]), outm
+
+
+def mmean(s):  # monthly mean, label "YYYY-MM"
+    m = s.resample("ME").mean().dropna(); return {d.strftime("%Y-%m"): round(float(v), 4) for d, v in m.items()}
+
+def yoy_monthly(s):
+    m = s.resample("ME").mean().dropna(); y = 100 * (m / m.shift(12) - 1)
+    return {d.strftime("%Y-%m"): round(float(v), 2) for d, v in y.dropna().items()}
+
+def monthly_block(data, nfci_s, ff_s, vix_s, oil_s, pce_s, core_s, gpr_m, epu_m, groups_m):
+    """data['monthly'] = {'series': [{m, nfci, ff, vix, oil, gpr, epu, pce_yoy, corepce_yoy}], 'groups': [{m, REAL, ...}]} from 2007-10."""
+    cols = {"nfci": mmean(nfci_s), "ff": mmean(ff_s), "vix": mmean(vix_s), "oil": mmean(oil_s), "pce_yoy": yoy_monthly(pce_s), "corepce_yoy": yoy_monthly(core_s), "gpr": gpr_m or {}, "epu": epu_m or {}}
+    keys = sorted(k for c in cols.values() for k in c if k >= "2007-10")
+    rows = []
+    for k in sorted(set(keys)):
+        row = {"m": k}
+        for name, c in cols.items():
+            if k in c: row[name] = c[k]
+        rows.append(row)
+    data["monthly"] = {"series": rows, "groups": groups_m or []}
 
 def expanding_z(series_dict, first=FIRST):
     keys = sorted(k for k in series_dict if k >= first); out = {}
@@ -116,14 +152,15 @@ def main(path):
     data = json.load(open(path))
     log = []
     gdp = fred("GDPC1"); g = growth_annualised(gdp)
-    nfci = qmean(fred("NFCI")); ff = qmean(fred("DFF")); vix = qmean(fred("VIXCLS")); oil = qmean(fred("DCOILWTICO"))
+    nfci_s = fred("NFCI"); ff_s = fred("DFF"); vix_s = fred("VIXCLS"); oil_s = fred("DCOILWTICO")
+    nfci = qmean(nfci_s); ff = qmean(ff_s); vix = qmean(vix_s); oil = qmean(oil_s)
     try: gpr = gpr_quarterly()
     except Exception as e: gpr = {}; log.append(f"GPR not refreshed: {e}")
     try: epu = epu_quarterly()
     except Exception as e: epu = {}; log.append(f"EPU not refreshed: {e}")
 
-    try: pce = yoy_quarterly(fred("PCEPI")); corepce = yoy_quarterly(fred("PCEPILFE"))
-    except Exception as e: pce = {}; corepce = {}; log.append(f"PCE inflation not refreshed: {e}")
+    try: pce_s = fred("PCEPI"); core_s = fred("PCEPILFE"); pce = yoy_quarterly(pce_s); corepce = yoy_quarterly(core_s)
+    except Exception as e: pce = {}; corepce = {}; pce_s = core_s = pd.Series(dtype=float); log.append(f"PCE inflation not refreshed: {e}")
     try: spf = spf_growth_consensus(); log.append(f"SPF growth consensus through {max(spf)}")
     except Exception as e: spf = {}; log.append(f"SPF growth consensus not refreshed: {e}")
 
@@ -151,10 +188,15 @@ def main(path):
                 s["v"].append([q, round(src[q], 4), z.get(q)]); log.append(f"{s['k']} + {q}")
         s["v"].sort(key=lambda v: v[0])
 
+    groups_m = None
     try:
-        groups, vint = fredmd_groups(); data["groups"] = groups; log.append(f"FRED-MD groups recomputed through {groups[-1]['o']} (vintage column: {vint})")
+        groups, vint, groups_m = fredmd_groups(); data["groups"] = groups; log.append(f"FRED-MD groups recomputed through {groups[-1]['o']} (vintage column: {vint})")
         data.setdefault("meta", {})["fredmd_vintage"] = dt.date.today().isoformat()
     except Exception as e: log.append(f"FRED-MD not refreshed: {e}")
+    try:
+        monthly_block(data, nfci_s, ff_s, vix_s, oil_s, pce_s, core_s, GPR_MONTHLY.get("gpr"), EPU_MONTHLY.get("epu"), groups_m or (data.get("monthly", {}) or {}).get("groups"))
+        log.append(f"monthly block through {data['monthly']['series'][-1]['m']}")
+    except Exception as e: log.append(f"monthly block not refreshed: {e}")
     data.setdefault("meta", {})["public_refresh"] = dt.date.today().isoformat()
     json.dump(data, open(path, "w"), separators=(",", ":"))
     with open("update_log.md", "a") as f:
