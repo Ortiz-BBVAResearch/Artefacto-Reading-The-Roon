@@ -113,10 +113,11 @@ footer{margin-top:44px; padding-top:18px; border-top:1px solid var(--rule); font
 <div class="wrap">
 <h1>Reading the Room with AI<span class="h1b">FOMC Deliberation and Growth at Risk</span></h1>
 <p class="sub">What FOMC deliberation adds to a Growth-at-Risk model built on 123 public series, across the whole distribution of growth four quarters ahead — and what the content of that information is not. Ortiz and Rodrigo, <em>Reading the Room with AI</em>.</p>
-<span class="stamp" id="stampVersion"></span><span class="stamp ok" id="stampData" hidden></span><button type="button" class="btn" id="liveBtn" style="margin:12px 0 0;padding:4px 10px;font-size:12px;vertical-align:bottom">Check for new data</button><span class="status" id="liveMsg" style="display:inline-block;margin:12px 0 0 10px"></span>
+<span class="stamp" id="stampVersion"></span><span class="stamp ok" id="stampData" hidden></span>
 
 <div class="controls top">
   <div class="cgroup"><span class="clabel" id="lbl-pres">Screen</span><div class="seg" role="group" aria-labelledby="lbl-pres" id="presSeg"></div></div>
+  <div class="cgroup" style="margin-left:auto;align-items:flex-end"><span class="clabel">Data</span><div style="display:flex;align-items:center;gap:10px"><span class="status" id="liveMsg" style="margin:0;text-align:right"></span><button type="button" class="btn" id="liveBtn" style="padding:7px 14px;font-size:13px;background:var(--pos);color:var(--surface);border-color:var(--pos)">Push here to update data</button></div></div>
 </div>
 
 <div class="tabs" role="tablist" id="tabs"></div>
@@ -129,7 +130,7 @@ footer{margin-top:44px; padding-top:18px; border-top:1px solid var(--rule); font
 // Everything the page shows is read from DATA. Updates (from the artifact database,
 // or from a file loaded in the Data tab) are merged into it by applyUpdate().
 const DATA = {
-  meta:{bank:'FOMC', bankName:'Federal Reserve (FOMC)', paper:'v4.25', date:'2026-10-15',
+  meta:{bank:'FOMC', bankName:'Federal Reserve (FOMC)', paper:'v4.27', date:'2026-10-21',
         sample:'70 quarterly targets, 2008Q4–2026Q1', source:'embedded', public_refresh:'2026-10-17', live_through:'2026Q2', fredmd_vintage:'2026-09'},
   blocks:[
     {k:'all',  label:'All 19 quantiles'},
@@ -716,7 +717,7 @@ function miniChart(points, opts){
   for(let y=Math.ceil(y0/step)*step; y<=y1; y+=step){ const x=X(Date.UTC(y,0,1)); if(x>ML) svg+='<text x="'+x+'" y="'+(H-MB+14)+'" text-anchor="middle" fill="var(--faint)" font-size="10" font-family="IBM Plex Mono, monospace">'+y+'</text>'; }
   svg+='<path d="'+points.map((p,i)=>(i?'L':'M')+X(p.x).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')+'" fill="none" stroke="'+(opts.col||'var(--pos)')+'" stroke-width="1.7"/>';
   if(opts.mark!=null){ const mp=points.reduce((a,p)=>Math.abs(p.x-opts.mark)<Math.abs(a.x-opts.mark)?p:a, points[0]);
-    svg+='<line x1="'+X(mp.x).toFixed(1)+'" y1="'+MT+'" x2="'+X(mp.x).toFixed(1)+'" y2="'+(H-MB)+'" stroke="var(--neg)" stroke-width="1" opacity="0.6"/><circle cx="'+X(mp.x).toFixed(1)+'" cy="'+Y(mp.v).toFixed(1)+'" r="3.5" fill="var(--neg)"/>'; }
+    svg+='<circle cx="'+X(mp.x).toFixed(1)+'" cy="'+Y(mp.v).toFixed(1)+'" r="3.5" fill="var(--neg)"/>'; }
   svg+='</svg>';
   return svg;
 }
@@ -739,7 +740,7 @@ function seriesCard(title, unit, points, cur, opts){
 function panelDash(){
   const el=document.createElement('div'); el.className='panel';
   const SECS=[{k:'groups',label:'Macro database (FRED-MD)'},{k:'external',label:'External measures'},{k:'macro',label:'Key variables'},{k:'deliberation',label:'Deliberation measures'}];
-  el.innerHTML='<h2>Model data: how the inputs evolve</h2><p class="note">The series that enter the paper’s Table 2 and the benchmark, as the model saw them at each forecast origin. The red marker is the origin selected in the Simulator; the readout gives the value at that origin and its distance from the mean of the signal’s own history up to then (the standardization the model uses).</p>';
+  el.innerHTML='<h2>Model data: how the inputs evolve</h2><p class="note">The series that enter the paper’s Table 2 and the benchmark, as the model saw them at each forecast origin. The orange dot is the origin selected in the Simulator; the readout gives the value at that origin and its distance from the mean of the signal’s own history up to then (the standardization the model uses).</p>';
   const nav=document.createElement('div'); nav.className='seg'; nav.style.cssText='display:inline-flex;margin:0 0 14px;flex-wrap:wrap';
   SECS.forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t.label; b.setAttribute('aria-pressed',String(t.k===dash.sec)); b.addEventListener('click',()=>{dash.sec=t.k; render();}); nav.appendChild(b); });
   const wn=document.createElement('div'); wn.className='seg'; wn.style.cssText='display:inline-flex;margin:0 0 14px 14px';
