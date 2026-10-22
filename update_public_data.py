@@ -58,6 +58,7 @@ def yoy_quarterly(s):  # monthly price index -> quarterly mean -> % change on a 
     q = s.resample("QE").mean().dropna(); y = 100 * (q / q.shift(4) - 1)
     return {f"{d.year}Q{(d.month-1)//3+1}": round(float(v), 2) for d, v in y.dropna().items()}
 
+FREDMD_RAW = {}
 def fredmd_groups():
     """Download the current FRED-MD vintage, apply its transformation codes, aggregate to quarters,
     and summarize each of the four groups of the paper's panel by its first principal component
@@ -92,14 +93,16 @@ def fredmd_groups():
         X = Q[cols].copy(); X = X.fillna(X.mean())
         Z = (X - X.mean()) / X.std(ddof=0); Z = Z.fillna(0.0)
         U, S, Vt = np.linalg.svd(Z.values, full_matrices=False); pc = Z.values @ Vt[0]; share = float(S[0]**2 / (S**2).sum())
+        pc2 = Z.values @ Vt[1]; share2 = float(S[1]**2 / (S**2).sum())
         a = Q[anchors[F]].values if anchors[F] in Q else Z.values[:, 0]
         m = ~np.isnan(a)
         if np.corrcoef(pc[m], a[m])[0, 1] < 0: pc = -pc
-        pc = (pc - pc.mean()) / pc.std()
-        res[F] = (pc, share)
+        if np.corrcoef(pc2[m], a[m])[0, 1] < 0: pc2 = -pc2   # same sign convention as the first component
+        pc = (pc - pc.mean()) / pc.std(); pc2 = (pc2 - pc2.mean()) / pc2.std()
+        res[F] = (pc, share, pc2, share2)
     for i, d in enumerate(Q.index):
         rec = {"o": f"{d.year}Q{(d.month-1)//3+1}"}
-        for F, (pc, share) in res.items(): rec[F] = round(float(pc[i]), 3); rec[F + "_share"] = round(share, 3)
+        for F, (pc, share, pc2, share2) in res.items(): rec[F] = round(float(pc[i]), 3); rec[F + "_share"] = round(share, 3); rec[F + "_PC2"] = round(float(pc2[i]), 3); rec[F + "_share2"] = round(share2, 3); rec[F + "_SUM"] = round(float(pc[i] + pc2[i]), 3)
         out.append(rec)
     # monthly version of the same summaries (same method on the monthly transformed panel)
     outm = []; resm = {}
@@ -107,14 +110,22 @@ def fredmd_groups():
         cols = [c for c in M.columns if fam.get(c) == F]
         X = M[cols].copy(); X = X.fillna(X.mean())
         Z = (X - X.mean()) / X.std(ddof=0); Z = Z.fillna(0.0)
-        U, S, Vt = np.linalg.svd(Z.values, full_matrices=False); pc = Z.values @ Vt[0]
+        U, S, Vt = np.linalg.svd(Z.values, full_matrices=False); pc = Z.values @ Vt[0]; pc2 = Z.values @ Vt[1]
         a = M[anchors[F]].values if anchors[F] in M else Z.values[:, 0]; m = ~np.isnan(a)
         if np.corrcoef(pc[m], a[m])[0, 1] < 0: pc = -pc
-        resm[F] = (pc - pc.mean()) / pc.std()
+        if np.corrcoef(pc2[m], a[m])[0, 1] < 0: pc2 = -pc2
+        resm[F] = ((pc - pc.mean()) / pc.std(), (pc2 - pc2.mean()) / pc2.std())
     for i, d in enumerate(M.index):
         rec = {"m": d.strftime("%Y-%m")}
-        for F, pc in resm.items(): rec[F] = round(float(pc[i]), 3)
+        for F, (pc, pc2) in resm.items(): rec[F] = round(float(pc[i]), 3); rec[F + "_PC2"] = round(float(pc2[i]), 3); rec[F + "_SUM"] = round(float(pc[i] + pc2[i]), 3)
         outm.append(rec)
+    # the raw monthly panel from 1994-01, for the series browser of the page (levels as published; the page applies the transformation code)
+    R = df[df.index >= "1994-01-01"]
+    try: names = json.load(open(os.path.join(os.path.dirname(__file__), "fredmd_names.json")))
+    except Exception: names = {}
+    FREDMD_RAW.update({"dates": [d.strftime("%Y-%m") for d in R.index], "tcode": {c: int(codes[c]) for c in R.columns if c in fam}, "names": {c: names.get(c, c) for c in R.columns if c in fam},
+                       "group": {c: fam[c] for c in R.columns if c in fam},
+                       "series": {c: [None if pd.isna(v) else float(f"{v:.6g}") for v in R[c].values] for c in R.columns if c in fam}})
     return out, str(raw.columns[0]), outm
 
 
@@ -196,6 +207,7 @@ def main(path):
     try:
         monthly_block(data, nfci_s, ff_s, vix_s, oil_s, pce_s, core_s, GPR_MONTHLY.get("gpr"), EPU_MONTHLY.get("epu"), groups_m or (data.get("monthly", {}) or {}).get("groups"))
         log.append(f"monthly block through {data['monthly']['series'][-1]['m']}")
+        if FREDMD_RAW: data["fredmd"] = FREDMD_RAW; log.append(f"FRED-MD raw panel through {FREDMD_RAW['dates'][-1]}")
     except Exception as e: log.append(f"monthly block not refreshed: {e}")
     data.setdefault("meta", {})["public_refresh"] = dt.date.today().isoformat()
     json.dump(data, open(path, "w"), separators=(",", ":"))
