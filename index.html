@@ -884,24 +884,22 @@ function panelDash(){
         const box=document.createElement('div'); box.className='chartbox'; box.innerHTML=multiChart(lines, {w:600, h:360, zero:'auto', label:'Four FRED-MD series'}); L1.appendChild(box);
         const leg=document.createElement('p'); leg.className='legend'; leg.innerHTML=lines.map(l=>{ const lp=l.last; const d=lp?new Date(lp.x):null; const sfx=(l.unit==='% y/y'||l.unit==='%')?'%':''; return '<span style="color:'+l.col+'">—— '+esc(l.name)+(lp?' · '+(Math.abs(lp.v)>=100?lp.v.toFixed(0):lp.v.toFixed(Math.abs(lp.v)>=10?1:2))+sfx+' ('+d.toLocaleString('en',{month:'short',timeZone:'UTC'})+' '+d.getUTCFullYear()+')':'')+(useZ?'':(l.unit&&l.unit!=='as published'?' · '+esc(l.unit):''))+'</span>'; }).join(' &nbsp;·&nbsp; ')+(useZ?' &nbsp;·&nbsp; <span style="color:var(--muted)">axis: standard deviations from each series’ mean over the window shown; the readouts are in the series’ own units</span>':' &nbsp;·&nbsp; <span style="color:var(--muted)">axis: '+esc(units[0])+'</span>'); L1.appendChild(leg);
         // scatter of two of the selected series
-        const sh3=document.createElement('h3'); sh3.className='sec'; sh3.style.marginTop='0'; sh3.textContent='Scatter: two of the series'; R1.appendChild(sh3);
-        if(dash.fms.length<2){ R1.appendChild(callout('<strong>Add a second series</strong> to draw the scatter.')); }
-        else {
-          if(!dash.scx || !dash.fms.includes(dash.scx)) dash.scx=dash.fms[0]; if(!dash.scy || !dash.fms.includes(dash.scy) || dash.scy===dash.scx) dash.scy=dash.fms.find(n=>n!==dash.scx);
-          const sc=document.createElement('div'); sc.className='controls'; sc.style.cssText='margin:0 0 10px;padding-block:8px';
-          const opt=(id,cur)=>'<select id="'+id+'" class="btn" style="padding:6px 8px;width:100%;min-width:0">'+dash.fms.map(n=>'<option value="'+esc(n)+'"'+(n===cur?' selected':'')+'>'+esc(title(n))+'</option>').join('')+'</select>';
+        const sh3=document.createElement('h3'); sh3.className='sec'; sh3.style.marginTop='0'; sh3.textContent='Scatter: any two series'; R1.appendChild(sh3);
+        {
+          if(!dash.scx || !names.includes(dash.scx)) dash.scx=dash.fms[0]||'INDPRO'; if(!dash.scy || !names.includes(dash.scy) || dash.scy===dash.scx) dash.scy=(dash.fms.find(n=>n!==dash.scx))||'UNRATE';
+          const sc=document.createElement('div'); sc.className='controls';
+          const opt=(id,cur)=>'<select id="'+id+'" class="btn" style="padding:6px 8px;width:100%;min-width:0">'+['REAL','NOMINAL','CREDIT_RATES','MARKETS'].map(g=>'<optgroup label="'+GN[g]+'">'+names.filter(n=>F.group[n]===g).sort((a,b)=>title(a).localeCompare(title(b))).map(n=>'<option value="'+esc(n)+'"'+(n===cur?' selected':'')+'>'+esc(title(n))+'</option>').join('')+'</optgroup>').join('')+'</select>';
           sc.style.cssText='margin:0 0 10px;padding-block:8px;display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:72px;align-items:end';
-          sc.innerHTML='<div class="cgroup" style="min-width:0"><span class="clabel">Horizontal axis</span>'+opt('scX',dash.scx)+'</div><div class="cgroup" style="min-width:0"><span class="clabel">Vertical axis</span>'+opt('scY',dash.scy)+'</div>';
+          sc.innerHTML='<div class="cgroup" style="min-width:0"><span class="clabel">Horizontal axis (any series)</span>'+opt('scX',dash.scx)+'</div><div class="cgroup" style="min-width:0"><span class="clabel">Vertical axis (any series)</span>'+opt('scY',dash.scy)+'</div>';
           R1.appendChild(sc);
-          const lx=lines.find(l=>l.nm===dash.scx), ly=lines.find(l=>l.nm===dash.scy);
-          // use the untransformed-to-z values (the series as shown in the gallery), paired by month
-          const raw=nm=>{ const vals=F.series[nm]; const tc=F.tcode[nm]; const y=transform(vals,tc); const m={}; F.dates.forEach((dm,j)=>{ if(y[j]!=null&&isFinite(y[j])) m[dm]=y[j]; }); return m; };
-          const mx=raw(dash.scx), my=raw(dash.scy); const inRec=t=>DATA.recessions.some(([a,b])=>t>=parseDate(a).getTime() && t<=parseDate(b).getTime());
-          let sp=F.dates.filter(dm=>mx[dm]!=null&&my[dm]!=null).map(dm=>({x:mx[dm], y:my[dm], t:mDate(dm), rec:inRec(mDate(dm))}));
+          // suggested form for each axis: year-on-year % for series the model takes in logs, level otherwise (independent of the "Show" switch of the gallery)
+          const sugg=nm=>{ const vals=F.series[nm]; const tc=F.tcode[nm]; const yoy=[5,6,7].includes(tc); const y=vals.map((v,i)=>{ if(v==null) return null; if(!yoy) return v; const p12=vals[i-12]; return (p12==null||p12===0)?null:100*(v/p12-1); }); const m={}; F.dates.forEach((dm,j)=>{ if(y[j]!=null&&isFinite(y[j])) m[dm]=y[j]; }); return {m, unit: yoy?'% y/y':(UNIT[nm]||'level')}; };
+          const sx=sugg(dash.scx), sy=sugg(dash.scy); const inRec=t=>DATA.recessions.some(([a,b])=>t>=parseDate(a).getTime() && t<=parseDate(b).getTime());
+          let sp=F.dates.filter(dm=>sx.m[dm]!=null&&sy.m[dm]!=null).map(dm=>({x:sx.m[dm], y:sy.m[dm], t:mDate(dm), rec:inRec(mDate(dm))}));
           sp=sp.filter(p=>winFilterG([{x:p.t}]).length);
-          const bx=document.createElement('div'); bx.className='chartbox'; bx.innerHTML=scatterChart(sp,{w:600,h:360,xl:title(dash.scx)+(lx&&lx.unit?' · '+lx.unit:''),yl:title(dash.scy)+(ly&&ly.unit?' · '+ly.unit:'')}); R1.appendChild(bx);
-          const lg2=document.createElement('p'); lg2.className='legend'; lg2.textContent='One point per month over the window shown, darker as it gets more recent; the red point is the last month, outlined points are NBER recession months; the dashed line is the least-squares fit (r is the correlation). Both series in the form selected above (year-on-year, as published or transformed).'; R1.appendChild(lg2);
-          setTimeout(()=>{ const a=document.getElementById('scX'); if(a) a.addEventListener('change',e=>{ dash.scx=e.target.value; if(dash.scy===dash.scx) dash.scy=dash.fms.find(n=>n!==dash.scx); render(); }); const b=document.getElementById('scY'); if(b) b.addEventListener('change',e=>{ dash.scy=e.target.value; if(dash.scx===dash.scy) dash.scx=dash.fms.find(n=>n!==dash.scy); render(); }); },0);
+          const bx=document.createElement('div'); bx.className='chartbox'; bx.innerHTML=scatterChart(sp,{w:600,h:360,xl:title(dash.scx)+' · '+sx.unit,yl:title(dash.scy)+' · '+sy.unit}); R1.appendChild(bx);
+          const lg2=document.createElement('p'); lg2.className='legend'; lg2.textContent='Any two series of the panel, each in its suggested form (year-on-year % for series the model takes in logs, level in its own units otherwise). One point per month over the window shown, darker as it gets more recent; the red point is the last month, outlined points are NBER recession months; the dashed line is the least-squares fit (r is the correlation).'; R1.appendChild(lg2);
+          setTimeout(()=>{ const a=document.getElementById('scX'); if(a) a.addEventListener('change',e=>{ dash.scx=e.target.value; render(); }); const b=document.getElementById('scY'); if(b) b.addEventListener('change',e=>{ dash.scy=e.target.value; render(); }); },0);
         }
         setTimeout(()=>{ el.querySelectorAll('button[data-ovmode]').forEach(b=>b.addEventListener('click',e=>{ dash.ovmode=e.currentTarget.dataset.ovmode; render(); })); },0);
       }
