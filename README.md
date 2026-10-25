@@ -1,19 +1,16 @@
-# Reading the Room with AI: FOMC Deliberation and Growth at Risk — explorer
+# Reading the Room with AI — Enhanced Edition v2.3
 
-Interactive companion to Ortiz and Rodrigo, *Reading the Room with AI* (working paper draft v4.25).
+Independent copy of v2.2; all prior versions preserved.
 
-- `index.html` — the whole page, self-contained (no build step, no external scripts except Google Fonts).
-- `data.json` — optional update file read by the page when it is served from a web server (GitHub Pages). Same schema as the page's *Data & updates* tab: any subset of `meta`, `series.hd_meetings` (`[["YYYY-MM-DD", value], …]`), `series.quarterly` (`[{"q":"2025Q4","hd":…,"ff":…,"g":…,"nfci":…,"spf":…}]`), `signals`, `ladder`, `robustness`, `rt`, `alternatives`. Series are merged by date, so the file can carry only the new readings.
+## Changes
+- Corrected the document title/version to v2.3.
+- Improved responsive stacking for shock sliders in the Simulator.
+- Retained the original dataset, model code, coefficients, forecasts, and scenario comparison calculations.
 
-## Publish with GitHub Pages
-1. Create a repository (public, or private with GitHub Pro) and upload these three files to its root.
-2. Settings → Pages → Build and deployment → Source: *Deploy from a branch* → Branch: `main`, folder `/ (root)` → Save.
-3. After a minute the page is at `https://<user>.github.io/<repository>/`.
+## Browser testing
+Automated Chromium rendering was performed with Playwright using HTML injection (`page.set_content`), because direct local navigation was blocked in the test environment. All six top-level tabs rendered without uncaught JavaScript exceptions in the v2.2 baseline; mobile horizontal overflow was absent on the Simulator at 390px. This is not equivalent to a full end-to-end hosted-server test, and external live updates were not validated.
 
-## Update the page
-Edit or replace `data.json` and commit; the page reads it on every load. To change the results or the text, replace `index.html`.
+## Run
+From this folder: `python -m http.server 8000`; open `http://localhost:8000`.
 
-Hidden Dissent index: Tsang and Yang (2025), *Journal of Economic Dynamics and Control* 180, 105197; data at https://www.digitecon.org/hidden-dissent-index.
-
-## Automatic refresh of the public series
-`.github/workflows/update-data.yml` runs every Monday (and on demand from the Actions tab): it pulls GDPC1, NFCI, DFF, VIXCLS and WTI from FRED, the GPR index and the US EPU index, extends `series.quarterly` and the external measures in `sig`, and commits `data.json` if anything changed. It needs no API key. It does **not** touch the model's distributions, Hidden Dissent or the SPF, which come from the replication pipeline (`update_explorer`) and the Tsang–Yang data site. First run: Actions → *Update public data* → *Run workflow*. If the repository's Actions are disabled, enable them in Settings → Actions → General.
+Title-only variant: Model data heading renamed to "The US Economy in Motion: Data Evolution & Relations". Original v2.3 preserved.
