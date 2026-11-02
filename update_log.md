@@ -36,3 +36,8 @@
 - SPF growth consensus not refreshed: Excel file format cannot be determined, you must specify an engine manually.
 - FRED-MD not refreshed: 403 Client Error: Forbidden for url: https://files.stlouisfed.org/files/htdocs/fred-md/monthly/current.csv
 - monthly block through 2026-10
+
+## 2026-11-02 public refresh
+- SPF growth consensus not refreshed: Excel file format cannot be determined, you must specify an engine manually.
+- FRED-MD not refreshed: 403 Client Error: Forbidden for url: https://files.stlouisfed.org/files/htdocs/fred-md/monthly/current.csv
+- monthly block through 2026-10
